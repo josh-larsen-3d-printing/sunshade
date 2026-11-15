@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+
+<!--
+  =============================================================================
+  Sun Shade Controller - Bluetooth (Web Bluetooth) version
+
+  This page talks to the ESP32 directly over Bluetooth Low Energy.
+  It must be opened over HTTPS (for example GitHub Pages) in Chrome
+  on Android. iPhones (Safari or Chrome on iOS) do NOT support Web Bluetooth.
+  =============================================================================
+-->
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#9b5a18">
+<link rel="manifest" href="manifest.json">
+
+<link rel="icon" href="icon-192.png">
+
+<link
+    rel="apple-touch-icon"
+    href="icon-192.png">
+
+<title>Smart Sun Shade Controller</title>
+
+<style>
+
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+body
+{
+  min-height:100vh;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  background:
+	  radial-gradient(circle at top,
+		#9b5a18 0%,
+		#6d3b0b 45%,
+		#2d1706 100%);
+
+  font-family:Arial,sans-serif;
+  color:white;
+}
+
+.container
+{
+  width:90%;
+  max-width:400px;
+
+  text-align:center;
+}
+
+h1
+{
+  font-size:42px;
+  font-weight:700;
+  margin-bottom:10px;
+
+  letter-spacing:1px;
+}
+
+.subtitle
+{
+  color:#aaa;
+  margin-bottom:40px;
+  font-size:18px;
+}
+
+button
+{
+  position:relative;
+
+  width:210px;
+  height:210px;
+
+  margin:18px;
+
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.22);
+
+  cursor:pointer;
+
+  color:white;
+  font-size:90px;
+
+  overflow:hidden;
+
+  background:rgba(255,255,255,.08);
+
+  backdrop-filter:blur(40px);
+  -webkit-backdrop-filter:blur(40px);
+
+	box-shadow:
+
+		inset 0 1px 0 rgba(255,255,255,.38),
+
+		inset 0 -1px 0 rgba(255,255,255,.08),
+
+		inset 0 0 0 2px rgba(255,255,255,.06),
+
+		0 10px 30px rgba(0,0,0,.22);
+
+  transition:
+    transform .15s ease,
+    background .2s ease,
+    box-shadow .2s ease;
+}
+
+
+/* Curved glass reflection */
+
+button::before
+{
+  content:"";
+
+  position:absolute;
+
+  inset:0;
+
+  border-radius:50%;
+
+  background:
+
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.25),
+      rgba(255,255,255,.05) 35%,
+      rgba(255,255,255,0) 65%
+    );
+
+  pointer-events:none;
+}
+
+button::after
+{
+    content:"";
+
+    position:absolute;
+
+    inset:-35%;
+
+    border-radius:50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(255,255,255,.18) 0%,
+            rgba(255,255,255,.05) 35%,
+            rgba(255,255,255,0) 75%
+        );
+
+    filter:blur(22px);
+
+    pointer-events:none;
+}
+
+/* Extra glow on hover */
+
+button:hover
+{
+  background:rgba(255,255,255,.14);
+
+  box-shadow:
+
+    inset 0 1px 0 rgba(255,255,255,.45),
+
+    inset 0 -1px 0 rgba(255,255,255,.12),
+
+    0 14px 36px rgba(0,0,0,.28);
+}
+
+
+/* Press effect */
+
+button.pressed
+{
+  transform:scale(.96);
+
+  background:rgba(255,255,255,.18);
+
+  box-shadow:
+    inset 0 2px 8px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.30),
+    0 6px 18px rgba(0,0,0,.20);
+}
+
+/* ===================================================
+   Added for the Bluetooth version
+   =================================================== */
+
+/* Status text under the buttons */
+
+.status
+{
+  margin-top:10px;
+  font-size:20px;
+  letter-spacing:2px;
+  min-height:28px;
+}
+
+/* Small hint text (for example "can take up to 30 s") */
+
+.hint
+{
+  color:#ccc;
+  font-size:14px;
+  min-height:20px;
+  margin-top:6px;
+}
+
+/* The Connect button is a pill, not a big circle */
+
+button.connect
+{
+  width:auto;
+  height:auto;
+
+  padding:14px 34px;
+  margin:0 0 20px 0;
+
+  border-radius:40px;
+
+  font-size:20px;
+}
+
+/* Stop the page from scrolling or zooming while a button is held */
+
+#up, #down
+{
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+/* Arrow buttons look faded until we are connected */
+
+button:disabled
+{
+  opacity:.35;
+  cursor:default;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Sun Shade</h1>
+
+<div class="subtitle">
+Touch and hold to move
+</div>
+
+<button id="connect" class="connect">Connect</button>
+
+<br>
+
+<button id="up" disabled>
+
+<svg width="90"
+     height="90"
+     viewBox="0 0 100 100">
+
+  <!-- Arrow shaft -->
+  <line
+    x1="50"
+    y1="78"
+    x2="50"
+    y2="28"
+
+    stroke="white"
+    stroke-width="10"
+    stroke-linecap="round"/>
+
+  <!-- Arrow head -->
+  <polyline
+
+    points="28,48 50,22 72,48"
+
+    fill="none"
+
+    stroke="white"
+    stroke-width="10"
+
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+</svg>
+
+</button>
+
+<br>
+
+<button id="down" disabled>
+
+<svg width="90"
+     height="90"
+     viewBox="0 0 100 100">
+
+  <!-- Arrow shaft -->
+  <line
+
+    x1="50"
+    y1="28"
+    x2="50"
+    y2="78"
+
+    stroke="white"
+    stroke-width="10"
+    stroke-linecap="round"/>
+
+  <!-- Arrow head -->
+
+  <polyline
+
+    points="28,58 50,84 72,58"
+
+    fill="none"
+
+    stroke="white"
+    stroke-width="10"
+
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+</svg>
+
+</button>
+
+<div class="status" id="status">
+NOT CONNECTED
+</div>
+
+<div class="hint" id="hint"></div>
+
+</div>
+
+<script>
+
+// ===================================================
+// Bluetooth IDs - must match the ESP32 sketch exactly
+// ===================================================
+
+const SERVICE_UUID = "5f2a0001-8c3e-4b7a-9d6e-2b1f4c8a7e10";
+const COMMAND_UUID = "5f2a0002-8c3e-4b7a-9d6e-2b1f4c8a7e10";
+const STATE_UUID   = "5f2a0003-8c3e-4b7a-9d6e-2b1f4c8a7e10";
+
+// The shade sleeps between wake-ups (WAKE_INTERVAL_S in the sketch),
+// so keep trying to connect for a bit longer than that
+const CONNECT_TRY_SECONDS = 60;
+
+
+// ===================================================
+// Page elements and variables
+// ===================================================
+
+const statusText  = document.getElementById("status");
+const hintText    = document.getElementById("hint");
+const connectBtn  = document.getElementById("connect");
+const up          = document.getElementById("up");
+const down        = document.getElementById("down");
+
+let device = null;               // the Sun Shade we picked
+let commandChar = null;          // where we write U / D / S
+let connecting = false;          // true while we are trying to connect
+let writeQueue = Promise.resolve();  // makes Bluetooth writes go one at a time
+
+function setStatus(text)
+{
+  statusText.textContent = text;
+}
+
+function setHint(text)
+{
+  hintText.textContent = text;
+}
+
+function setConnected(isConnected)
+{
+  up.disabled = !isConnected;
+  down.disabled = !isConnected;
+  connectBtn.style.display = isConnected ? "none" : "";
+}
+
+function wait(ms)
+{
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+// ===================================================
+// Check that this browser can do Bluetooth
+// ===================================================
+
+if (!navigator.bluetooth)
+{
+  connectBtn.disabled = true;
+  setStatus("NO BLUETOOTH");
+  setHint("Use Chrome on Android, over HTTPS. iPhone browsers are not supported.");
+}
+
+
+// ===================================================
+// Connect
+// ===================================================
+
+// Step 1: let the user pick the shade (needs a button tap)
+async function pickDevice()
+{
+  device = await navigator.bluetooth.requestDevice({
+    filters: [{ services: [SERVICE_UUID] }]
+  });
+
+  device.addEventListener("gattserverdisconnected", onDisconnected);
+}
+
+// Step 2: connect, retrying while the shade is asleep
+async function connectToDevice()
+{
+  if (connecting) return;
+  connecting = true;
+
+  setStatus("CONNECTING");
+  setHint("Waking the shade, this can take up to " + CONNECT_TRY_SECONDS + " s");
+
+  const giveUpTime = Date.now() + CONNECT_TRY_SECONDS * 1000;
+
+  while (Date.now() < giveUpTime)
+  {
+    try
+    {
+      const server  = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+
+      commandChar = await service.getCharacteristic(COMMAND_UUID);
+
+      // Listen for state changes (for example "TIMEOUT")
+      const stateChar = await service.getCharacteristic(STATE_UUID);
+      stateChar.addEventListener("characteristicvaluechanged", onStateChanged);
+      await stateChar.startNotifications();
+
+      // Show the current state right away
+      const value = await stateChar.readValue();
+      setStatus(new TextDecoder().decode(value));
+
+      setHint("");
+      setConnected(true);
+      connecting = false;
+      return;
+    }
+    catch (error)
+    {
+      // The shade is probably asleep. Wait a moment and try again.
+      console.log("Connect attempt failed:", error);
+      await wait(1000);
+    }
+  }
+
+  connecting = false;
+  setStatus("NOT CONNECTED");
+  setHint("Couldn't reach the shade. Tap Connect to try again.");
+}
+
+// Connect button
+connectBtn.addEventListener("click", async () =>
+{
+  try
+  {
+    if (!device)
+    {
+      await pickDevice();
+    }
+
+    await connectToDevice();
+  }
+  catch (error)
+  {
+    // The user closed the device picker
+    console.log(error);
+    setHint("No shade selected.");
+  }
+});
+
+// If Chrome remembers a shade we used before, reconnect without the picker
+// (getDevices() is new in Chrome, so we check that it exists first)
+async function tryRememberedDevice()
+{
+  if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+
+  const devices = await navigator.bluetooth.getDevices();
+
+  if (devices.length > 0)
+  {
+    device = devices[0];
+    device.addEventListener("gattserverdisconnected", onDisconnected);
+    connectToDevice();
+  }
+}
+
+tryRememberedDevice();
+
+
+// ===================================================
+// Disconnect and state updates
+// ===================================================
+
+function onDisconnected()
+{
+  commandChar = null;
+  setConnected(false);
+  up.classList.remove("pressed");
+  down.classList.remove("pressed");
+  setStatus("NOT CONNECTED");
+  setHint("The shade went to sleep to save battery. Tap Connect.");
+}
+
+function onStateChanged(event)
+{
+  setStatus(new TextDecoder().decode(event.target.value));
+}
+
+// Leaving the app? Stop the motor and let the shade go back to sleep.
+document.addEventListener("visibilitychange", () =>
+{
+  if (document.hidden && device && device.gatt.connected)
+  {
+    send("S").then(() => device.gatt.disconnect());
+  }
+});
+
+
+// ===================================================
+// Send a command: "U" = up, "D" = down, "S" = stop
+// ===================================================
+
+function send(command)
+{
+  // Bluetooth can only do one write at a time, so we line them up
+  writeQueue = writeQueue.then(async () =>
+  {
+    if (!commandChar) return;
+
+    try
+    {
+      await commandChar.writeValueWithResponse(new TextEncoder().encode(command));
+    }
+    catch (error)
+    {
+      console.log("Write failed:", error);
+    }
+  });
+
+  return writeQueue;
+}
+
+
+// ===================================================
+// Hold-to-move buttons
+// ===================================================
+//
+// "Pointer" events work for both fingers and a mouse,
+// so one set of listeners covers everything.
+
+function setupHoldButton(button, command, movingText)
+{
+  button.addEventListener("pointerdown", (e) =>
+  {
+    e.preventDefault();
+
+    // Keep getting events even if the finger slides off the button
+    button.setPointerCapture(e.pointerId);
+
+    button.classList.add("pressed");
+    send(command);
+    setStatus(movingText);
+  });
+
+  // Finger lifted, or Android cancelled the touch: always stop
+  const stop = () =>
+  {
+    if (!button.classList.contains("pressed")) return;
+
+    button.classList.remove("pressed");
+    send("S");
+    setStatus("STOPPED");
+  };
+
+  button.addEventListener("pointerup", stop);
+  button.addEventListener("pointercancel", stop);
+
+  // Stop the long-press menu from popping up
+  button.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
+setupHoldButton(up,   "U", "MOVING UP");
+setupHoldButton(down, "D", "MOVING DOWN");
+
+</script>
+
+
+<script>
+
+if ('serviceWorker' in navigator)
+{
+    navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('Service Worker Registered'));
+}
+
+</script>
+
+</body>
+</html>

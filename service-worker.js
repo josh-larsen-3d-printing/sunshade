@@ -6,7 +6,7 @@
 // so phones download the new files.
 // ============================================================================
 
-const CACHE = "sunshade-ble-v1";
+const CACHE = "sunshade-ble-v2";
 
 // Relative paths so this works on GitHub Pages (/your-repo/) too
 const FILES = [
